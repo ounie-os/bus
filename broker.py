@@ -5,8 +5,8 @@ import socket
 from collections import deque
 from enum import Enum
 
-import transcoding
-from constant import broker_server_addr
+from bus import transcoding
+from bus.constant import broker_server_addr
 
 
 class ComType(Enum):
