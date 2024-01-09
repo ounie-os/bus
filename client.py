@@ -2,7 +2,7 @@ import socket
 import threading
 from queue import Queue
 
-import transcoding
+from bus import transcoding
 
 
 class BusClient(threading.Thread):
@@ -55,6 +55,7 @@ class PubBusClient(BusClient):
             print(e)
 
     def start_publish(self):
+        self.connect()
         self.start()
 
     def run(self):
@@ -87,7 +88,8 @@ class SubBusClient(BusClient):
     def __init__(self, addr, recv_queue: Queue):
         super().__init__(addr, recv_queue)
 
-    def subscribe(self, topic):
+    def start_subscribe(self, topic):
+        self.connect()
         msg = {'type': 2, 'topic': topic}
         self.queue.put(transcoding.json2bytes(msg))
         self.start()
@@ -129,7 +131,7 @@ if __name__ == '__main__':
     sub_client = SubBusClient('/tmp/socket', Queue())
     pub_client = PubBusClient('/tmp/socket', Queue())
     sub_client.connect()
-    sub_client.subscribe('/user/new')
+    sub_client.start_subscribe('/user/new')
     pub_client.connect()
     pub_client.start_publish()
     pub_client.publish('/usr/new', '12345')

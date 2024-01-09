@@ -30,7 +30,11 @@ class BrokerServer(socketserver.ThreadingUnixStreamServer):
         if self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT"):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
-        self.socket.bind(self.server_address)
+        try:
+            self.socket.bind(self.server_address)
+        except OSError:
+            os.unlink(self.server_address)
+            self.socket.bind(self.server_address)
         self.server_address = self.socket.getsockname()
 
     def verify_request(self, request, client_address):
@@ -100,7 +104,7 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
                 #     self.request.sendall(transcoding.str2bytes(msg))
                 target_msg = mq_center.get(topic).pop()
                 try:
-                    self.request.send(transcoding.str2bytes(target_msg))
+                    self.request.send(transcoding.json2bytes(target_msg))
                     # print(f'sub_handle send {target_msg}')
                 except BrokenPipeError:
                     break
@@ -118,12 +122,3 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
         else:
             pass
         # self.server.mq_con.release()
-
-
-if __name__ == '__main__':
-    try:
-        os.unlink(broker_server_addr)
-    except FileNotFoundError:
-        pass
-    server = BrokerServer(broker_server_addr, BrokerRequestHandle, {})
-    server.serve_forever()
