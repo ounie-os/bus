@@ -14,43 +14,87 @@ class ComType(Enum):
     SUB = 2
 
 
-class BrokerServer(socketserver.ThreadingUnixStreamServer):
+if os.name == 'nt':
+    class BrokerServer(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
 
-    def __init__(self, server_address: str | bytes, RequestHandlerClass, mq_center):
-        super().__init__(server_address, RequestHandlerClass)
-        self.mq_center = mq_center
-        self.mq_lock = threading.RLock()
-        self.mq_event = threading.Event()
-        self.com_type = 0
+        def __init__(self, server_address, RequestHandlerClass, mq_center):
+            super().__init__(server_address, RequestHandlerClass)
+            self.mq_center = mq_center
+            self.mq_lock = threading.RLock()
+            self.mq_event = threading.Event()
+            self.com_type = 0
 
-    def server_bind(self):
-        # TCP_NODELAY
-        if self.allow_reuse_address and hasattr(socket, "SO_REUSEADDR"):
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT"):
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
-        try:
-            self.socket.bind(self.server_address)
-        except OSError:
-            os.unlink(self.server_address)
-            self.socket.bind(self.server_address)
-        self.server_address = self.socket.getsockname()
+        # def server_activate(self):
+        #     pass
 
-    def verify_request(self, request, client_address):
-        """
-        :param request: socket.socket fd=4, family=1, type=1, proto=0, laddr=/tmp/socket
-        :param client_address: None
-        :return:
-        """
+        def server_bind(self):
+            # TCP_NODELAY
+            if self.allow_reuse_address and hasattr(socket, "SO_REUSEADDR"):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT"):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
+            try:
+                self.socket.bind(self.server_address)
+            except OSError as e:
+                print('server_bind', e)
+                # os.unlink(self.server_address)
+                # self.socket.bind(self.server_address)
+            # self.server_address = self.socket.getsockname()
 
-        # 首先先建立连接，获取通信类型
-        msg = request.recv(1024)
-        recv_msg = transcoding.bytes2json(msg)
-        self.com_type = recv_msg.get('type')
-        request.sendall(b'connect ok')
+        def verify_request(self, request, client_address):
+            """
+            :param request: socket.socket fd=4, family=1, type=1, proto=0, laddr=/tmp/socket
+            :param client_address: None
+            :return:
+            """
 
-        return True
+            # 首先先建立连接，获取通信类型
+            msg = request.recv(1024)
+            recv_msg = transcoding.bytes2json(msg)
+            self.com_type = recv_msg.get('type')
+            request.sendall(b'connect ok')
+
+            return True
+else:
+    class BrokerServer(socketserver.ThreadingUnixStreamServer):
+
+        def __init__(self, server_address: str | bytes, RequestHandlerClass, mq_center):
+            super().__init__(server_address, RequestHandlerClass)
+            self.mq_center = mq_center
+            self.mq_lock = threading.RLock()
+            self.mq_event = threading.Event()
+            self.com_type = 0
+
+        def server_bind(self):
+            # TCP_NODELAY
+            if self.allow_reuse_address and hasattr(socket, "SO_REUSEADDR"):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT"):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
+            try:
+                self.socket.bind(self.server_address)
+            except OSError:
+                os.unlink(self.server_address)
+                self.socket.bind(self.server_address)
+            self.server_address = self.socket.getsockname()
+
+        def verify_request(self, request, client_address):
+            """
+            :param request: socket.socket fd=4, family=1, type=1, proto=0, laddr=/tmp/socket
+            :param client_address: None
+            :return:
+            """
+
+            # 首先先建立连接，获取通信类型
+            msg = request.recv(1024)
+            recv_msg = transcoding.bytes2json(msg)
+            self.com_type = recv_msg.get('type')
+            request.sendall(b'connect ok')
+
+            return True
 
 
 class BrokerRequestHandle(socketserver.BaseRequestHandler):

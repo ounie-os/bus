@@ -1,3 +1,4 @@
+import os
 import socket
 import threading
 from queue import Queue
@@ -9,7 +10,10 @@ class BusClient(threading.Thread):
     def __init__(self, addr, recv_queue: Queue):
         super().__init__()
         self.connect_flag = 0
-        self.sk = socket.socket(family=socket.AF_UNIX)
+        if os.name == 'nt':
+            self.sk = socket.socket(family=socket.AF_INET)
+        else:
+            self.sk = socket.socket(family=socket.AF_UNIX)
         self.sk.settimeout(3)
         self.remote_addr = addr
         self.queue = Queue()
@@ -100,12 +104,13 @@ class SubBusClient(BusClient):
     def connect(self):
         try:
             ret = self.sk.connect(self.remote_addr)
+            print('SubBusClient connect', ret)
             self.connect_flag = 1
             con_msg = {'type': 2}
             self.sk.sendall(transcoding.json2bytes(con_msg))
             self.sk.recv(1024)
         except Exception as e:
-            print(e)
+            print('SubBusClient', e)
 
     def run(self):
         item = self.queue.get()
