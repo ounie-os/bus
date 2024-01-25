@@ -1,12 +1,11 @@
 import os
+import socket
 import socketserver
 import threading
-import socket
 from collections import deque
 from enum import Enum
 
 from bus import transcoding
-from bus.constant import broker_server_addr
 
 
 class ComType(Enum):
@@ -22,7 +21,8 @@ if os.name == 'nt':
             super().__init__(server_address, RequestHandlerClass)
             self.mq_center = mq_center
             self.mq_lock = threading.RLock()
-            self.mq_event = threading.Event()
+            # self.mq_event = threading.Event()
+            self.mq_event_table = {}
             self.com_type = 0
 
         # def server_activate(self):
@@ -64,7 +64,8 @@ else:
             super().__init__(server_address, RequestHandlerClass)
             self.mq_center = mq_center
             self.mq_lock = threading.RLock()
-            self.mq_event = threading.Event()
+            # self.mq_event = threading.Event()
+            self.mq_event_table = {}
             self.com_type = 0
 
         def server_bind(self):
@@ -112,11 +113,16 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
             topic = msg_item.get('topic')
             self.server.mq_lock.acquire()
             mq_center = self.server.mq_center
+            mq_event_table = self.server.mq_event_table
             # 将消息加入哈希链表
             mq_center.setdefault(topic, deque()).appendleft(msg)
+            topic_event = mq_event_table.get(topic)
+            if topic_event is None:
+                topic_event = threading.Event()
+                mq_event_table.update({topic: topic_event})
             # print(mq_center)
             self.server.mq_lock.release()
-            self.server.mq_event.set()
+            topic_event.set()
             # self.server.mq_con.notify()
             self.request.send(b'publish ok')
             # self.server.mq_con.wait()
@@ -139,9 +145,15 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
             self.server.mq_lock.release()
             if msgs is None or len(msgs) == 0:
                 # print(f'{topic} is not exist. wait')
+                print(self.client_address[0], self.client_address[1], topic, mq_center)
                 # self.server.mq_con.wait()
-                self.server.mq_event.wait()
-                self.server.mq_event.clear()
+                mq_event_table = self.server.mq_event_table
+                topic_event = mq_event_table.get(topic)
+                if topic_event is None:
+                    mq_event_table.update({topic: threading.Event()})
+                topic_event = self.server.mq_event_table.get(topic)
+                topic_event.wait()
+                topic_event.clear()
                 # print(f'got sub msg')
             else:
                 # for msg in msgs:
@@ -150,7 +162,8 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
                 try:
                     self.request.send(transcoding.json2bytes(target_msg))
                     # print(f'sub_handle send {target_msg}')
-                except BrokenPipeError:
+                except Exception as e:
+                    print(e)
                     break
                 # self.server.mq_con.notify()
             # self.server.mq_con.release()
@@ -166,3 +179,4 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
         else:
             pass
         # self.server.mq_con.release()
+        self.server.shutdown_request(self.request)

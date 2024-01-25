@@ -14,7 +14,7 @@ class BusClient(threading.Thread):
             self.sk = socket.socket(family=socket.AF_INET)
         else:
             self.sk = socket.socket(family=socket.AF_UNIX)
-        self.sk.settimeout(3)
+        # self.sk.settimeout(3)
         self.remote_addr = addr
         self.queue = Queue()
         self.recv_queue = recv_queue
@@ -45,7 +45,7 @@ class PubBusClient(BusClient):
         if self.connect_flag == 0:
             return
         msg = {'type': 1, 'topic': topic, 'msg': data}
-        print(f'publish {msg}')
+        # print(f'publish {msg}')
         self.queue.put(transcoding.json2bytes(msg))
 
     def connect(self):
@@ -54,7 +54,8 @@ class PubBusClient(BusClient):
             self.connect_flag = 1
             con_msg = {'type': 1}
             self.sk.sendall(transcoding.json2bytes(con_msg))
-            self.sk.recv(1024)
+            connect_response = self.sk.recv(1024)
+            print('PubBusClient:', connect_response)
         except Exception as e:
             print(e)
 
@@ -75,7 +76,7 @@ class PubBusClient(BusClient):
                     self.disconnect()
                     break
                 # broker的回复放入队列供读取
-                print(recv_item)
+                # print(recv_item)
                 self.recv_queue.put(recv_item)
             except ConnectionResetError:
                 self.disconnect()
@@ -91,10 +92,12 @@ class SubBusClient(BusClient):
 
     def __init__(self, addr, recv_queue: Queue):
         super().__init__(addr, recv_queue)
+        self.topic = ''
 
     def start_subscribe(self, topic):
         self.connect()
         msg = {'type': 2, 'topic': topic}
+        self.topic = topic
         self.queue.put(transcoding.json2bytes(msg))
         self.start()
 
@@ -108,7 +111,8 @@ class SubBusClient(BusClient):
             self.connect_flag = 1
             con_msg = {'type': 2}
             self.sk.sendall(transcoding.json2bytes(con_msg))
-            self.sk.recv(1024)
+            connect_response = self.sk.recv(1024)
+            print('SubBusClient:', connect_response)
         except Exception as e:
             print('SubBusClient', e)
 
@@ -123,11 +127,12 @@ class SubBusClient(BusClient):
                     self.disconnect()
                     print('subcribe broken')
                     break
-                print(recv_item)
+                # print(recv_item)
                 # broker的回复放入队列供读取
                 self.recv_queue.put(recv_item)
-            except TimeoutError:
-                pass
+            except TimeoutError as e:
+                print(e, self.topic)
+                break
 
         self.close()
 
