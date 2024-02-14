@@ -17,12 +17,13 @@ if os.name == 'nt':
     class BrokerServer(socketserver.ThreadingTCPServer):
         allow_reuse_address = True
 
-        def __init__(self, server_address, RequestHandlerClass, mq_center):
+        def __init__(self, server_address, RequestHandlerClass, mq_center, logger):
             super().__init__(server_address, RequestHandlerClass)
             self.mq_center = mq_center
             self.mq_lock = threading.RLock()
             # self.mq_event = threading.Event()
             self.mq_event_table = {}
+            self.logger = logger
             self.com_type = 0
 
         # def server_activate(self):
@@ -60,12 +61,13 @@ if os.name == 'nt':
 else:
     class BrokerServer(socketserver.ThreadingUnixStreamServer):
 
-        def __init__(self, server_address: str | bytes, RequestHandlerClass, mq_center):
+        def __init__(self, server_address: str | bytes, RequestHandlerClass, mq_center, logger):
             super().__init__(server_address, RequestHandlerClass)
             self.mq_center = mq_center
             self.mq_lock = threading.RLock()
             # self.mq_event = threading.Event()
             self.mq_event_table = {}
+            self.logger = logger
             self.com_type = 0
 
         def server_bind(self):
@@ -102,31 +104,29 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
 
     # 处理客户端发布消息动作。消息生产者
     def pub_handle(self):
+        logger = self.server.logger
         while True:
             # self.server.mq_con.acquire()
             msg_item = self.request.recv(1024)
             if msg_item == b'':
                 break
-            # print(f'pub_handle({threading.current_thread().name}): {msg_item}')
             msg_item = transcoding.bytes2json(msg_item)
             msg = msg_item.get('msg')
             topic = msg_item.get('topic')
+            logger.debug(f'publish msg: {topic}: {msg}')
             self.server.mq_lock.acquire()
             mq_center = self.server.mq_center
-            mq_event_table = self.server.mq_event_table
             # 将消息加入哈希链表
             mq_center.setdefault(topic, deque()).appendleft(msg)
+            self.server.mq_lock.release()
+            mq_event_table = self.server.mq_event_table
             topic_event = mq_event_table.get(topic)
             if topic_event is None:
                 topic_event = threading.Event()
                 mq_event_table.update({topic: topic_event})
-            # print(mq_center)
-            self.server.mq_lock.release()
+
             topic_event.set()
-            # self.server.mq_con.notify()
             self.request.send(b'publish ok')
-            # self.server.mq_con.wait()
-            # self.server.mq_con.release()
 
     # 处理客户端的订阅消息动作。消息消费者
     def sub_handle(self):
@@ -137,40 +137,28 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
         msg_item = transcoding.bytes2json(msg_item)
         topic = msg_item.get('topic')
         while True:
-            # self.server.mq_con.acquire()
-            # print(f'sub_handle({threading.current_thread().name})')
             self.server.mq_lock.acquire()
             mq_center = self.server.mq_center
             msgs = mq_center.get(topic)
             self.server.mq_lock.release()
             if msgs is None or len(msgs) == 0:
-                # print(f'{topic} is not exist. wait')
-                print(self.client_address[0], self.client_address[1], topic, mq_center)
-                # self.server.mq_con.wait()
                 mq_event_table = self.server.mq_event_table
                 topic_event = mq_event_table.get(topic)
                 if topic_event is None:
-                    mq_event_table.update({topic: threading.Event()})
-                topic_event = self.server.mq_event_table.get(topic)
+                    topic_event = threading.Event()
+                    mq_event_table.update({topic: topic_event})
                 topic_event.wait()
                 topic_event.clear()
-                # print(f'got sub msg')
             else:
-                # for msg in msgs:
-                #     self.request.sendall(transcoding.str2bytes(msg))
                 target_msg = mq_center.get(topic).pop()
                 try:
                     self.request.send(transcoding.json2bytes(target_msg))
-                    # print(f'sub_handle send {target_msg}')
                 except Exception as e:
                     print(e)
                     break
-                # self.server.mq_con.notify()
-            # self.server.mq_con.release()
 
     def handle(self):
-        print(f'handle {self.request}')
-        # self.server.mq_con.acquire()
+        print(f'new broker handle {self.request}')
         com_type = self.server.com_type
         if com_type == ComType.PUB.value:
             self.pub_handle()
@@ -178,5 +166,4 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
             self.sub_handle()
         else:
             pass
-        # self.server.mq_con.release()
         self.server.shutdown_request(self.request)

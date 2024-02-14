@@ -129,7 +129,7 @@ class SubBusClient(BusClient):
                     break
                 # print(recv_item)
                 # broker的回复放入队列供读取
-                self.recv_queue.put(recv_item)
+                self.recv_queue.put(transcoding.bytes2json(recv_item))
             except TimeoutError as e:
                 print(e, self.topic)
                 break

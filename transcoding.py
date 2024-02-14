@@ -14,7 +14,7 @@ def str2json(src: str):
 
 
 def json2str(src: object):
-    return json.dumps(src)
+    return json.dumps(src, default=lambda x: x.__dict__)
 
 
 def bytes2json(src: bytes, encoding='utf-8'):
