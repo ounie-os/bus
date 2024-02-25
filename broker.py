@@ -130,6 +130,7 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
 
     # 处理客户端的订阅消息动作。消息消费者
     def sub_handle(self):
+        logger = self.server.logger
         msg_item = self.request.recv(1024)
         print(f'sub_handle: {msg_item}')
         if msg_item == b'':
@@ -154,7 +155,9 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
                 try:
                     self.request.send(transcoding.json2bytes(target_msg))
                 except Exception as e:
-                    print(e)
+                    logger.warning(f'topic: {topic} sub handle canceled: {e}')
+                    self.server.mq_event_table.pop(topic)
+                    mq_center.pop(topic)
                     break
 
     def handle(self):
