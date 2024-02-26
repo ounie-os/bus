@@ -106,27 +106,29 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
     def pub_handle(self):
         logger = self.server.logger
         while True:
-            # self.server.mq_con.acquire()
-            msg_item = self.request.recv(1024)
-            if msg_item == b'':
+            try:
+                msg_item = self.request.recv(1024)
+                if msg_item == b'':
+                    break
+                msg_item = transcoding.bytes2json(msg_item)
+                msg = msg_item.get('msg')
+                topic = msg_item.get('topic')
+                logger.debug(f'publish msg: {topic}: {msg}')
+                self.server.mq_lock.acquire()
+                mq_center = self.server.mq_center
+                # 将消息加入哈希链表
+                mq_center.setdefault(topic, deque()).appendleft(msg)
+                self.server.mq_lock.release()
+                mq_event_table = self.server.mq_event_table
+                topic_event = mq_event_table.get(topic)
+                if topic_event is None:
+                    topic_event = threading.Event()
+                    mq_event_table.update({topic: topic_event})
+                topic_event.set()
+                self.request.send(b'publish ok')
+            except Exception as e:
+                logger.warning(f'{self.request} sub handle canceled: {e}')
                 break
-            msg_item = transcoding.bytes2json(msg_item)
-            msg = msg_item.get('msg')
-            topic = msg_item.get('topic')
-            logger.debug(f'publish msg: {topic}: {msg}')
-            self.server.mq_lock.acquire()
-            mq_center = self.server.mq_center
-            # 将消息加入哈希链表
-            mq_center.setdefault(topic, deque()).appendleft(msg)
-            self.server.mq_lock.release()
-            mq_event_table = self.server.mq_event_table
-            topic_event = mq_event_table.get(topic)
-            if topic_event is None:
-                topic_event = threading.Event()
-                mq_event_table.update({topic: topic_event})
-
-            topic_event.set()
-            self.request.send(b'publish ok')
 
     # 处理客户端的订阅消息动作。消息消费者
     def sub_handle(self):
