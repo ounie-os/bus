@@ -13,6 +13,8 @@ class ComType(Enum):
     SUB = 2
 
 
+msg_header = b'A5A55A5A'
+
 if os.name == 'nt':
     class BrokerServer(socketserver.ThreadingTCPServer):
         allow_reuse_address = True
@@ -155,7 +157,10 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
             else:
                 target_msg = mq_center.get(topic).pop()
                 try:
-                    self.request.send(transcoding.json2bytes(target_msg))
+                    target_msg_bytes = transcoding.json2bytes(target_msg)
+                    length = len(target_msg_bytes)
+                    send_msg_bytes = msg_header + length.to_bytes(4, 'little') + target_msg_bytes
+                    self.request.send(send_msg_bytes)
                 except Exception as e:
                     logger.warning(f'topic: {topic} sub handle canceled: {e}')
                     self.server.mq_event_table.pop(topic)

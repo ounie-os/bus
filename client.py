@@ -1,11 +1,16 @@
 import asyncio
 import os
 import socket
+import struct
 import threading
 from json import JSONDecodeError
 from queue import Queue
 
 from bus import transcoding
+
+MSG_HEAD_PACK_SIZE = 8
+MSG_HEAD_DATA_SIZE = 4
+MSG_HEAD_SIZE = MSG_HEAD_PACK_SIZE + MSG_HEAD_DATA_SIZE
 
 
 class BusClient(threading.Thread):
@@ -154,15 +159,37 @@ class SubBusClient(BusClient):
         self.sk.sendall(item)
         while self.connect_flag:
             try:
+                recv_buffer = b''
                 recv_item = self.sk.recv(1024)
                 # 连接断开了
                 if recv_item == b'':
                     self.disconnect()
                     print('subcribe broken')
                     break
-                # print(recv_item)
-                # broker的回复放入队列供读取
-                self.recv_queue.put(transcoding.bytes2json(recv_item))
+                recv_buffer += recv_item
+                while True:
+                    recv_buffer_length = len(recv_buffer)
+                    # 收到的数据包长度比包头都短
+                    if recv_buffer_length < MSG_HEAD_SIZE:
+                        break
+                    # 找出包头
+                    msg_header = recv_buffer[:MSG_HEAD_PACK_SIZE]
+                    # 包头匹配
+                    if msg_header == b'A5A55A5A':
+                        msg_body_size = struct.unpack('I', recv_buffer[
+                                                        MSG_HEAD_PACK_SIZE:MSG_HEAD_PACK_SIZE + MSG_HEAD_DATA_SIZE])[0]
+                        # 收到的数据包长度小于要求的长度
+                        if recv_buffer_length < MSG_HEAD_SIZE + msg_body_size:
+                            # print(f'数据包长度小于包头加要求的长度{msg_body_size}')
+                            break
+                        the_item = recv_buffer[MSG_HEAD_SIZE: MSG_HEAD_SIZE + msg_body_size]
+                        # broker的回复放入队列供读取
+                        self.recv_queue.put(transcoding.bytes2json(the_item))
+                        recv_buffer = recv_buffer[MSG_HEAD_SIZE + msg_body_size:]
+                        # print(the_item)
+                        # print(recv_buffer)
+                        # print('------')
+
             except TimeoutError as e:
                 print(e, self.topic)
             except JSONDecodeError as e:
@@ -207,15 +234,37 @@ class SubBusClientAsync(BusClientAsync):
         self.sk.sendall(item)
         while self.connect_flag:
             try:
+                recv_buffer = b''
                 recv_item = self.sk.recv(1024)
                 # 连接断开了
                 if recv_item == b'':
                     self.disconnect()
                     print('subcribe broken')
                     break
-                # print(recv_item)
-                # broker的回复放入队列供读取
-                await self.recv_queue.put(transcoding.bytes2json(recv_item))
+                recv_buffer += recv_item
+                while True:
+                    recv_buffer_length = len(recv_buffer)
+                    # 收到的数据包长度比包头都短
+                    if recv_buffer_length < MSG_HEAD_SIZE:
+                        break
+                    # 找出包头
+                    msg_header = recv_buffer[:MSG_HEAD_PACK_SIZE]
+                    # 包头匹配
+                    if msg_header == b'A5A55A5A':
+                        msg_body_size = struct.unpack('I', recv_buffer[
+                                                        MSG_HEAD_PACK_SIZE:MSG_HEAD_PACK_SIZE + MSG_HEAD_DATA_SIZE])[0]
+                        # 收到的数据包长度小于要求的长度
+                        if recv_buffer_length < MSG_HEAD_SIZE + msg_body_size:
+                            # print(f'数据包长度小于包头加要求的长度{msg_body_size}')
+                            break
+                        the_item = recv_buffer[MSG_HEAD_SIZE: MSG_HEAD_SIZE + msg_body_size]
+                        # broker的回复放入队列供读取
+                        await self.recv_queue.put(transcoding.bytes2json(the_item))
+                        recv_buffer = recv_buffer[MSG_HEAD_SIZE + msg_body_size:]
+                        # print(the_item)
+                        # print(recv_buffer)
+                        # print('------')
+
             except TimeoutError as e:
                 print(e, self.topic)
             except JSONDecodeError as e:
