@@ -73,6 +73,7 @@ else:
             self.mq_event_table = {}
             self.logger = logger
             self.com_type = 0
+            self.mq_strategy = 0
 
         def server_bind(self):
             # TCP_NODELAY
@@ -99,6 +100,7 @@ else:
             msg = request.recv(1024)
             recv_msg = transcoding.bytes2json(msg)
             self.com_type = recv_msg.get('type')
+            self.mq_strategy = recv_msg.get('strategy')
             request.sendall(b'connect ok')
 
             return True
