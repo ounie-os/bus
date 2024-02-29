@@ -128,9 +128,10 @@ class PubBusClient(BusClient):
 
 class SubBusClient(BusClient):
 
-    def __init__(self, addr, recv_queue: Queue):
+    def __init__(self, addr, recv_queue: Queue, strategy: int = 0):
         super().__init__(addr, recv_queue)
         self.topic = ''
+        self.strategy = strategy
 
     def start_subscribe(self, topic):
         self.connect()
@@ -147,7 +148,7 @@ class SubBusClient(BusClient):
             ret = self.sk.connect(self.remote_addr)
             print('SubBusClient connect', ret)
             self.connect_flag = 1
-            con_msg = {'type': 2}
+            con_msg = {'type': 2, 'strategy': self.strategy}
             self.sk.sendall(transcoding.json2bytes(con_msg))
             connect_response = self.sk.recv(1024)
             print('SubBusClient:', connect_response)
@@ -203,9 +204,10 @@ class SubBusClient(BusClient):
 
 class SubBusClientAsync(BusClientAsync):
 
-    def __init__(self, addr, recv_queue: asyncio.Queue):
+    def __init__(self, addr, recv_queue: asyncio.Queue, strategy: int = 0):
         super().__init__(addr, recv_queue)
         self.topic = ''
+        self.strategy = strategy
 
     def start_subscribe(self, topic):
         self.connect()
@@ -222,7 +224,7 @@ class SubBusClientAsync(BusClientAsync):
             ret = self.sk.connect(self.remote_addr)
             print('SubBusClient connect', ret)
             self.connect_flag = 1
-            con_msg = {'type': 2}
+            con_msg = {'type': 2, 'strategy': self.strategy}
             self.sk.sendall(transcoding.json2bytes(con_msg))
             connect_response = self.sk.recv(1024)
             print('SubBusClient:', connect_response)

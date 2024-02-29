@@ -27,6 +27,7 @@ if os.name == 'nt':
             self.mq_event_table = {}
             self.logger = logger
             self.com_type = 0
+            self.mq_strategy = 0
 
         # def server_activate(self):
         #     pass
@@ -57,6 +58,7 @@ if os.name == 'nt':
             msg = request.recv(1024)
             recv_msg = transcoding.bytes2json(msg)
             self.com_type = recv_msg.get('type')
+            self.mq_strategy = recv_msg.get('strategy')
             request.sendall(b'connect ok')
 
             return True
@@ -141,9 +143,12 @@ class BrokerRequestHandle(socketserver.BaseRequestHandler):
             return
         msg_item = transcoding.bytes2json(msg_item)
         topic = msg_item.get('topic')
+        mq_center = self.server.mq_center
+        # 策略模式1 ：订阅之前清除历史数据，只订阅后面新来的数据
+        if self.server.mq_strategy == 1 and mq_center.get(topic) is not None:
+            del self.server.mq_center[topic]
         while True:
             self.server.mq_lock.acquire()
-            mq_center = self.server.mq_center
             msgs = mq_center.get(topic)
             self.server.mq_lock.release()
             if msgs is None or len(msgs) == 0:
