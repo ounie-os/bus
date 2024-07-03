@@ -194,9 +194,11 @@ class SubBusClient(BusClient):
             except TimeoutError as e:
                 print(e, self.topic)
             except JSONDecodeError as e:
-                print(e, recv_item)
+                print(f'topic: {self.topic} json decoder error {recv_item}')
             except ConnectionAbortedError as e:
                 print(f'topic:{self.topic} cancel subcribe: {e}')
+            except Exception as e:
+                print(e, self.topic)
                 break
 
         self.close()

@@ -81,7 +81,7 @@ else:
                 self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             if self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT"):
                 self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
+            # self.socket.setsockopt(socket.SOL_SOCKET, socket.TCP_NODELAY, 1)
             try:
                 self.socket.bind(self.server_address)
             except OSError:
