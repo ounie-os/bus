@@ -272,7 +272,7 @@ class SubBusClientAsync(BusClientAsync):
                         if self.bytes_result:
                             await self.recv_queue.put(the_item)
                         else:
-                            self.recv_queue.put(transcoding.bytes2json(the_item))
+                            await self.recv_queue.put(transcoding.bytes2json(the_item))
                         recv_buffer = recv_buffer[MSG_HEAD_SIZE + msg_body_size:]
                         # print(the_item)
                         # print(recv_buffer)
