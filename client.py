@@ -128,10 +128,11 @@ class PubBusClient(BusClient):
 
 class SubBusClient(BusClient):
 
-    def __init__(self, addr, recv_queue: Queue, strategy: int = 0):
+    def __init__(self, addr, recv_queue: Queue, strategy: int = 0, bytes_result=False):
         super().__init__(addr, recv_queue)
         self.topic = ''
         self.strategy = strategy
+        self.bytes_result = bytes_result
 
     def start_subscribe(self, topic):
         self.connect()
@@ -185,7 +186,11 @@ class SubBusClient(BusClient):
                             break
                         the_item = recv_buffer[MSG_HEAD_SIZE: MSG_HEAD_SIZE + msg_body_size]
                         # broker的回复放入队列供读取
-                        self.recv_queue.put(transcoding.bytes2json(the_item))
+                        # self.recv_queue.put(transcoding.bytes2json(the_item))
+                        if self.bytes_result:
+                            self.recv_queue.put(the_item)
+                        else:
+                            self.recv_queue.put(transcoding.bytes2json(the_item))
                         recv_buffer = recv_buffer[MSG_HEAD_SIZE + msg_body_size:]
                         # print(the_item)
                         # print(recv_buffer)
@@ -206,10 +211,11 @@ class SubBusClient(BusClient):
 
 class SubBusClientAsync(BusClientAsync):
 
-    def __init__(self, addr, recv_queue: asyncio.Queue, strategy: int = 0):
+    def __init__(self, addr, recv_queue: asyncio.Queue, strategy: int = 0, bytes_result=False):
         super().__init__(addr, recv_queue)
         self.topic = ''
         self.strategy = strategy
+        self.bytes_result = bytes_result
 
     def start_subscribe(self, topic):
         self.connect()
@@ -263,7 +269,10 @@ class SubBusClientAsync(BusClientAsync):
                             break
                         the_item = recv_buffer[MSG_HEAD_SIZE: MSG_HEAD_SIZE + msg_body_size]
                         # broker的回复放入队列供读取
-                        await self.recv_queue.put(transcoding.bytes2json(the_item))
+                        if self.bytes_result:
+                            await self.recv_queue.put(the_item)
+                        else:
+                            self.recv_queue.put(transcoding.bytes2json(the_item))
                         recv_buffer = recv_buffer[MSG_HEAD_SIZE + msg_body_size:]
                         # print(the_item)
                         # print(recv_buffer)
